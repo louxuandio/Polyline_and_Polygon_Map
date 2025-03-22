@@ -4,19 +4,33 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.polylineandpolygonmap.ui.theme.PolylineAndPolygonMapTheme
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
@@ -26,6 +40,8 @@ import com.google.android.gms.maps.model.Gap
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.LatLngBounds
 import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.Polygon
 import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
@@ -62,6 +78,9 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun PolyMap(){
     val context = LocalContext.current
+
+    // I first tried to do with a kml file, but at last I decided to draw the polyline with a list of LatLng.
+    // I drew the trail on a map, and export it as kml file. I sent the kml to ChatGPT to give me the list.
     val polylinePoints = remember {
         listOf(
             LatLng(42.439543, -71.3342915),
@@ -148,29 +167,121 @@ fun PolyMap(){
         LatLng(42.428259, -71.336386),
     )
 
+    var polygonColor by remember { mutableStateOf(Color(0x3333CC33)) }
+    var polylineColor by remember { mutableStateOf(Color.Blue) }
+    var lineWidth by remember { mutableStateOf(5f) }
+
+    var showTrailInfo by remember { mutableStateOf(false) }
+    var showParkInfo by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         val bounds = boundsBuilder.build()
         cameraPositionState.move(
             CameraUpdateFactory.newLatLngBounds(bounds, 100)
         )
     }
-    GoogleMap(
-        modifier = Modifier.fillMaxSize(),
-        cameraPositionState = cameraPositionState
-    ) {
-        Polyline(
-            points = polylinePoints, // Pass the list of LatLng coordinates
-            color = Color.Blue, // Set the polyline color
-            width = 5f, // Set the polyline width
-            pattern = listOf(Dash(20f), Gap(10f))
-        )
 
-        Polygon(
-            points = reservationPolygon,
-            fillColor = Color(0x3333CC33),
-            strokeColor = Color.Green,
-            strokeWidth = 3f
-        )
+    Column (
+        modifier = Modifier.padding(8.dp)
+    ){
+        // choose color for polygon
+        Text("Polygon Color:", style = TextStyle(fontSize = 24.sp) )
+        Row (
+            modifier = Modifier.fillMaxWidth()
+                .padding(8.dp)
+        ){
+            Button(onClick = { polygonColor = Color(0x3333CC33) }) { Text("Green") }
+            Button(onClick = { polygonColor = Color(0x330000FF) }) { Text("Blue") }
+            Button(onClick = { polygonColor = Color(0x33FFFF00) }) { Text("Yellow") }
+        }
+        Text("Polyline Color:", style = TextStyle(fontSize = 24.sp) )
+        Row (
+            modifier = Modifier.fillMaxWidth()
+                .padding(8.dp)
+        ){
+            Button(onClick = { polylineColor = Color.Green }) { Text("Green") }
+            Button(onClick = { polylineColor = Color.Blue }) { Text("Blue") }
+            Button(onClick = { polylineColor = Color.Yellow }) { Text("Yellow") }
+        }
+        Text("Polyline Width:", style = TextStyle(fontSize = 24.sp))
+        Row (
+            modifier = Modifier.fillMaxWidth()
+                .padding(8.dp)
+        ){
+            Slider(
+                value = lineWidth,
+                onValueChange = { lineWidth = it },
+                valueRange = 1f..20f,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Box{
+            GoogleMap(
+                modifier = Modifier.fillMaxSize(),
+                cameraPositionState = cameraPositionState
+            ) {
+                Polyline(
+                    points = polylinePoints, // Pass the list of LatLng coordinates
+                    color = polylineColor, // Set the polyline color
+                    width = lineWidth, // Set the polyline width
+                    pattern = listOf(Dash(20f), Gap(10f))
+                )
 
+                Polygon(
+                    points = reservationPolygon,
+                    fillColor = polygonColor,
+                    strokeColor = Color.Black,
+                    strokeWidth = 3f
+                )
+                Marker(
+                    state = MarkerState(position = polylinePoints.first()),
+                    title = "Walden Pond Trail",
+                    snippet = "Walden Pond Trail",
+                    onClick = {
+                        showTrailInfo = true
+                        true
+                    }
+                )
+
+                Marker(
+                    state = MarkerState(position = LatLng(42.440238,-71.344354)),
+                    title = "Walden Pond State Reservation",
+                    snippet = "Walden Pond State Reservation",
+                    onClick = {
+                        showParkInfo = true
+                        true
+                    }
+                )
+            }
+        }
+    }
+
+    //I asked ChatGPT how to show more details when clicking on a marker, and ChatGPT taught me what is and how to do AlertDialog.
+    if (showTrailInfo){
+        AlertDialog(
+            onDismissRequest = {showTrailInfo = false},
+            title = { Text("Walden Pond Trail") },
+            text = {
+                Text("Length: 1.8 miles\nEstimated time: 34 minutes\nDifficulty: Easy\nSurface: gravel, paved\nScenery: Forest, lakeshore")
+            },
+            confirmButton = {
+                TextButton(onClick = { showTrailInfo = false }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+    if (showParkInfo){
+        AlertDialog(
+            onDismissRequest = {showParkInfo = false},
+            title = { Text("Walden Pond State Reservation") },
+            text = {
+                Text("The Walden Pond State Reservation offers hiking, swimming, and historical landmarks such as Thoreau's cabin site. The area is protected for conservation and education.")
+            },
+            confirmButton = {
+                TextButton(onClick = { showParkInfo = false }) {
+                    Text("Close")
+                }
+            }
+        )
     }
 }
